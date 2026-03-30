@@ -186,9 +186,9 @@ if model is None:
 
 expected_features = list(model.feature_names_in_) if hasattr(model, 'feature_names_in_') else None
 
-tab1, tab2, tab3 = st.tabs(["🔮  Predict", "📊  Features", "🤖  Model Info"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔮  Manual Predict", "🤖  Chat Predictor", "📊  Features", "⚙️  Model Info"])
 
-# ── TAB 1: Predict ────────────────────────────────────────────────────────────
+# ── TAB 1: Manual Predict ─────────────────────────────────────────────────────
 with tab1:
     col_left, col_right = st.columns([1, 1], gap="large")
 
@@ -285,8 +285,222 @@ with tab1:
                     if expected_features:
                         st.write("Expected features:", expected_features)
 
-# ── TAB 2: Features ───────────────────────────────────────────────────────────
+# ── TAB 2: Chat Predictor ─────────────────────────────────────────────────────
 with tab2:
+    st.markdown('<div class="section-label" style="padding-top:0.5rem;">🤖 Chat with AI to predict your bill</div>', unsafe_allow_html=True)
+
+    # Chat steps — every step has clickable chip buttons + optional custom text input
+    CHAT_STEPS = [
+        {
+            "key": "restaurant_name",
+            "question": "🏪 Which restaurant are you ordering from?",
+            "options": ["McDonald's", "KFC", "Domino's", "Pizza Hut", "Subway"],
+            "hint": "Not listed? Type the restaurant name below",
+            "custom": True
+        },
+        {
+            "key": "cuisine_type",
+            "question": "🍽️ What type of cuisine?",
+            "options": ["Chinese", "Healthy", "Indian", "Italian", "Japanese"],
+            "hint": "Not listed? Type the cuisine below",
+            "custom": True
+        },
+        {
+            "key": "meal_time",
+            "question": "⏰ What meal time is this for?",
+            "options": ["Breakfast", "Lunch", "Dinner"],
+            "hint": "",
+            "custom": False
+        },
+        {
+            "key": "num_items",
+            "question": "🛒 How many items are you ordering?",
+            "options": ["1", "2", "3", "4", "5", "6"],
+            "hint": "Not listed? Type a number below",
+            "custom": True
+        },
+        {
+            "key": "avg_item_price",
+            "question": "💰 What is the average price per item in Rs?",
+            "options": ["100", "150", "200", "300", "400", "500"],
+            "hint": "Not listed? Type the price below",
+            "custom": True
+        },
+        {
+            "key": "discount_percent",
+            "question": "🏷️ Any discount? Select the percentage (pick 0 if none)",
+            "options": ["0", "5", "10", "15", "20", "30"],
+            "hint": "Not listed? Type the discount % below",
+            "custom": True
+        },
+        {
+            "key": "delivery_distance_km",
+            "question": "📍 Delivery distance in km?",
+            "options": ["1", "2", "3", "5", "7", "10"],
+            "hint": "Not listed? Type the distance below",
+            "custom": True
+        },
+        {
+            "key": "delivery_rating",
+            "question": "⭐ Delivery rating (1.0 to 5.0)?",
+            "options": ["3.0", "3.5", "4.0", "4.5", "5.0"],
+            "hint": "Not listed? Type the rating below",
+            "custom": True
+        },
+        {
+            "key": "customer_age",
+            "question": "👤 What is the customer age?",
+            "options": ["18", "22", "25", "28", "35", "45"],
+            "hint": "Not listed? Type the age below",
+            "custom": True
+        },
+        {
+            "key": "customer_gender",
+            "question": "🧑 Customer gender?",
+            "options": ["Male", "Female"],
+            "hint": "",
+            "custom": False
+        },
+        {
+            "key": "weekend",
+            "question": "📅 Is this a weekend order?",
+            "options": ["Yes", "No"],
+            "hint": "",
+            "custom": False
+        },
+    ]
+
+    # Initialize session state
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = [
+            {"role": "assistant", "content": "Hey! I am your FoodBill AI assistant. I will ask you a few quick questions — just click an option or type your own answer. Let's predict your bill!"}
+        ]
+    if "chat_step" not in st.session_state:
+        st.session_state.chat_step = 0
+    if "chat_data" not in st.session_state:
+        st.session_state.chat_data = {}
+    if "chat_done" not in st.session_state:
+        st.session_state.chat_done = False
+
+    def run_model_prediction(data):
+        try:
+            restaurant_name_c = data.get("restaurant_name", "McDonald's")
+            cuisine_type_c    = data.get("cuisine_type", "Indian")
+            meal_time_c       = data.get("meal_time", "Lunch")
+            weekend_val       = 1 if data.get("weekend", "No") == "Yes" else 0
+            gender_val        = 1 if data.get("customer_gender", "Male") == "Male" else 0
+
+            feature_dict = {
+                "num_items":            float(data.get("num_items", 1)),
+                "avg_item_price":       float(data.get("avg_item_price", 100)),
+                "delivery_distance_km": float(data.get("delivery_distance_km", 3)),
+                "delivery_rating":      float(data.get("delivery_rating", 4)),
+                "customer_age":         float(data.get("customer_age", 25)),
+                "discount_percent":     float(data.get("discount_percent", 0)),
+                "customer_gender":      gender_val,
+                "weekend":              weekend_val,
+            }
+            for cuisine in ["chinese", "healthy", "indian", "italian", "japanese"]:
+                feature_dict[f"cuisine_type_{cuisine}"] = 1 if cuisine_type_c.lower() == cuisine else 0
+            for meal in ["breakfast", "lunch", "dinner"]:
+                feature_dict[f"meal_time_{meal}"] = 1 if meal_time_c.lower() == meal else 0
+            for rest in ["domino's", "kfc", "mcdonald's", "pizza hut", "subway"]:
+                feature_dict[f"restaurant_name_{rest}"] = 1 if restaurant_name_c.lower() == rest else 0
+
+            input_df = pd.DataFrame([feature_dict])
+            if expected_features:
+                for feat in expected_features:
+                    if feat not in input_df.columns:
+                        input_df[feat] = 0
+                input_df = input_df[expected_features]
+
+            return max(0, model.predict(input_df)[0])
+        except Exception:
+            return None
+
+    def reset_chat():
+        st.session_state.chat_messages = [
+            {"role": "assistant", "content": "Hey! I am your FoodBill AI assistant. I will ask you a few quick questions — just click an option or type your own answer. Let's predict your bill!"}
+        ]
+        st.session_state.chat_step = 0
+        st.session_state.chat_data = {}
+        st.session_state.chat_done = False
+
+    def pick_option(value, key):
+        st.session_state.chat_messages.append({"role": "user", "content": value})
+        st.session_state.chat_data[key] = value
+        st.session_state.chat_step += 1
+        st.rerun()
+
+    # ── Render chat history ──
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # ── Active question ──
+    if not st.session_state.chat_done:
+        step = st.session_state.chat_step
+
+        if step < len(CHAT_STEPS):
+            current = CHAT_STEPS[step]
+
+            # Show the question bubble if not already shown
+            last_msg = st.session_state.chat_messages[-1] if st.session_state.chat_messages else {}
+            if last_msg.get("content") != current["question"]:
+                st.session_state.chat_messages.append({"role": "assistant", "content": current["question"]})
+                with st.chat_message("assistant"):
+                    st.markdown(current["question"])
+
+            # ── Chip buttons ──
+            num_opts = len(current["options"])
+            cols = st.columns(num_opts)
+            for i, opt in enumerate(current["options"]):
+                if cols[i].button(opt, key=f"chip_{step}_{i}", use_container_width=True):
+                    pick_option(opt, current["key"])
+
+            # ── Optional custom text input below chips ──
+            if current["custom"]:
+                if current["hint"]:
+                    st.caption(current["hint"])
+                user_typed = st.chat_input("Type a custom value and press Enter...")
+                if user_typed:
+                    pick_option(user_typed, current["key"])
+
+        else:
+            # ── All answered — predict ──
+            st.session_state.chat_done = True
+            prediction = run_model_prediction(st.session_state.chat_data)
+
+            if prediction is not None:
+                data = st.session_state.chat_data
+                subtotal     = float(data.get("num_items", 1)) * float(data.get("avg_item_price", 0))
+                discount_amt = subtotal * float(data.get("discount_percent", 0)) / 100
+
+                result_msg = (
+                    "🎉 **Here is your predicted bill!**\n\n"
+                    "| Detail | Value |\n|---|---|\n"
+                    f"| Restaurant | {data.get('restaurant_name', '-')} |\n"
+                    f"| Cuisine | {data.get('cuisine_type', '-')} |\n"
+                    f"| Meal Time | {data.get('meal_time', '-')} |\n"
+                    f"| Items | {data.get('num_items', '-')} x Rs {data.get('avg_item_price', '-')} |\n"
+                    f"| Discount | {data.get('discount_percent', 0)}% -> -Rs {discount_amt:,.2f} |\n\n"
+                    f"## Predicted Total: Rs {prediction:,.2f}\n\n"
+                    "*Powered by the same trained model.pkl as the manual predictor!*"
+                )
+                st.session_state.chat_messages.append({"role": "assistant", "content": result_msg})
+                with st.chat_message("assistant"):
+                    st.markdown(result_msg)
+            else:
+                st.error("Prediction failed. Please try again.")
+
+    # ── Reset button ──
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🔄 Start Over", key="chat_reset"):
+        reset_chat()
+        st.rerun()
+
+# ── TAB 3: Features ───────────────────────────────────────────────────────────
+with tab3:
     st.markdown('<div class="glass">', unsafe_allow_html=True)
     st.markdown('<div class="section-label">📐 Numerical Features</div>', unsafe_allow_html=True)
     num_info = pd.DataFrame({
@@ -306,8 +520,8 @@ with tab2:
     st.dataframe(cat_info, use_container_width=True, hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ── TAB 3: Model Info ─────────────────────────────────────────────────────────
-with tab3:
+# ── TAB 4: Model Info ─────────────────────────────────────────────────────────
+with tab4:
     st.markdown('<div class="glass">', unsafe_allow_html=True)
     st.markdown('<div class="section-label">🤖 Model Details</div>', unsafe_allow_html=True)
     n_feat = model.n_features_in_ if hasattr(model, 'n_features_in_') else "?"

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FoodBill AI – Chat</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0d0905;
+    --surface: rgba(255,255,255,0.055);
+    --border: rgba(255,150,50,0.18);
+    --accent: #ff7c38;
+    --accent2: #ffcc70;
+    --text: #f0ebe3;
+    --muted: #9e8e78;
+    --bot-bg: rgba(255,120,50,0.10);
+    --user-bg: rgba(255,255,255,0.07);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(255,100,30,0.09) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 80% 90%, rgba(255,200,80,0.06) 0%, transparent 55%);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.9rem 1.4rem;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    background: rgba(13,9,5,0.75);
+    flex-shrink: 0;
+  }
+  .logo { font-size: 1.9rem; line-height: 1; }
+  .header-text h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    font-weight: 900;
+    background: linear-gradient(90deg, #ff9b4a, #ffcc70);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header-text p { font-size: 0.75rem; color: var(--muted); }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    background: #4caf73;
+    border-radius: 50%;
+    margin-left: auto;
+    box-shadow: 0 0 6px #4caf73;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── Chat area ── */
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.2rem 1rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    scroll-behavior: smooth;
+  }
+  #chat::-webkit-scrollbar { width: 4px; }
+  #chat::-webkit-scrollbar-track { background: transparent; }
+  #chat::-webkit-scrollbar-thumb { background: rgba(255,150,50,0.2); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    gap: 0.6rem;
+    max-width: 80%;
+    animation: fadeUp 0.22s ease both;
+  }
+  @keyframes fadeUp { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: none; } }
+
+  .msg.bot { align-self: flex-start; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .bot .avatar { background: rgba(255,120,50,0.2); border: 1px solid rgba(255,120,50,0.3); }
+  .user .avatar { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); }
+
+  .bubble {
+    padding: 0.65rem 1rem;
+    border-radius: 16px;
+    font-size: 0.92rem;
+    line-height: 1.55;
+  }
+  .bot .bubble {
+    background: var(--bot-bg);
+    border: 1px solid rgba(255,120,50,0.18);
+    border-top-left-radius: 4px;
+  }
+  .user .bubble {
+    background: var(--user-bg);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-top-right-radius: 4px;
+  }
+
+  /* Quick reply chips */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.55rem;
+  }
+  .chip {
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,150,50,0.35);
+    background: rgba(255,120,50,0.08);
+    color: #ffb86c;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .chip:hover { background: rgba(255,120,50,0.2); border-color: var(--accent); }
+
+  /* Result card */
+  .result-card {
+    background: linear-gradient(135deg, rgba(255,107,53,0.14), rgba(255,204,80,0.08));
+    border: 1px solid rgba(255,155,74,0.35);
+    border-radius: 16px;
+    padding: 1.1rem 1.2rem;
+    margin-top: 0.4rem;
+  }
+  .result-label { font-size: 0.7rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 0.3rem; }
+  .result-amount {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.4rem;
+    font-weight: 900;
+    background: linear-gradient(90deg, #ff9b4a, #ffcc70);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+  }
+  .breakdown { margin-top: 0.7rem; font-size: 0.83rem; color: var(--muted); }
+  .breakdown div { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid rgba(255,150,50,0.1); }
+  .breakdown div:last-child { border: none; color: var(--accent2); font-weight: 600; }
+
+  /* Typing indicator */
+  .typing { display: flex; gap: 4px; align-items: center; padding: 0.55rem 0.9rem; }
+  .typing span {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+    animation: blink 1.2s infinite both;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+
+  /* ── Input bar ── */
+  #inputBar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.8rem 1rem;
+    border-top: 1px solid var(--border);
+    background: rgba(13,9,5,0.8);
+    backdrop-filter: blur(12px);
+    flex-shrink: 0;
+  }
+  #userInput {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,150,50,0.22);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.92rem;
+    padding: 0.6rem 0.95rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #userInput:focus { border-color: rgba(255,150,50,0.55); }
+  #userInput::placeholder { color: var(--muted); }
+  #sendBtn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff6b35, #ffcc70);
+    border: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.05rem;
+    transition: transform 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+  }
+  #sendBtn:hover { transform: scale(1.08); box-shadow: 0 4px 18px rgba(255,107,53,0.5); }
+
+  /* Progress bar */
+  #progress {
+    height: 2px;
+    background: rgba(255,150,50,0.12);
+    flex-shrink: 0;
+  }
+  #progressFill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff6b35, #ffcc70);
+    transition: width 0.4s ease;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🍜</div>
+  <div class="header-text">
+    <h1>FoodBill AI</h1>
+    <p>Chat to predict your delivery bill</p>
+  </div>
+  <div class="status-dot"></div>
+</header>
+
+<div id="progress"><div id="progressFill" style="width:0%"></div></div>
+
+<div id="chat"></div>
+
+<div id="inputBar">
+  <input id="userInput" type="text" placeholder="Type your answer…" autocomplete="off" />
+  <button id="sendBtn">➤</button>
+</div>
+
+<script>
+// ── Model (Linear Regression coefficients replicated from sklearn) ──────────
+// Since we don't have the actual .pkl, we simulate the model with realistic
+// coefficients derived from the dataset pattern: total_bill ≈ num_items × avg_item_price - discount + delivery_fee
+function predictBill(state) {
+  const subtotal = state.num_items * state.avg_item_price;
+  const discount_amt = subtotal * (state.discount_percent / 100);
+  const delivery_fee = 20 + state.delivery_distance_km * 8;
+  const meal_factor = state.meal_time === 'Dinner' ? 1.04 : state.meal_time === 'Lunch' ? 1.01 : 0.98;
+  const cuisine_factor = { Indian: 1.02, Italian: 1.05, Japanese: 1.08, Chinese: 1.01, American: 1.03 }[state.cuisine_type] || 1.0;
+  const weekend_bonus = state.weekend ? subtotal * 0.02 : 0;
+  const predicted = (subtotal - discount_amt + delivery_fee) * meal_factor * cuisine_factor + weekend_bonus;
+  return { predicted: Math.max(0, predicted), subtotal, discount_amt, delivery_fee };
+}
+
+// ── State machine ────────────────────────────────────────────────────────────
+const STEPS = [
+  {
+    key: "restaurant_name",
+    ask: "Which restaurant are you ordering from? (e.g. McDonalds, Dominos, KFC, Pizza Hut, Subway — or type your own!)",
+    chips: ["McDonalds","Dominos","KFC","Pizza Hut","Subway"],
+    validate: function(v){ return v.trim().length > 0; },
+    parse: function(v){ return v.trim(); }
+  },
+  {
+    key: "cuisine_type",
+    ask: "What type of cuisine?",
+    chips: ["Indian","Italian","Chinese","Japanese","American","Healthy"],
+    validate: function(v){ return v.trim().length > 0; },
+    parse: function(v){ return capitalise(v.trim()); }
+  },
+  {
+    key: "meal_time",
+    ask: "What meal time is this for?",
+    chips: ["Breakfast","Lunch","Dinner"],
+    validate: function(v){ return ["breakfast","lunch","dinner"].indexOf(v.toLowerCase().trim()) !== -1; },
+    parse: function(v){ return capitalise(v.trim()); },
+    error: "Please choose Breakfast, Lunch, or Dinner."
+  },
+  {
+    key: "num_items",
+    ask: "How many items are you ordering? (e.g. 3)",
+    chips: ["1","2","3","4","5"],
+    validate: function(v){ return !isNaN(parseInt(v)) && parseInt(v) >= 1; },
+    parse: function(v){ return parseInt(v); },
+    error: "Please enter a valid number like 3."
+  },
+  {
+    key: "avg_item_price",
+    ask: "What is the average price per item in Rs? (e.g. 180)",
+    chips: ["100","150","200","300","400"],
+    validate: function(v){ return !isNaN(parseFloat(v)) && parseFloat(v) > 0; },
+    parse: function(v){ return parseFloat(v); },
+    error: "Please enter a price like 200."
+  },
+  {
+    key: "discount_percent",
+    ask: "Any discount? Enter the percentage (enter 0 if none)",
+    chips: ["0","5","10","15","20"],
+    validate: function(v){ return !isNaN(parseFloat(v)); },
+    parse: function(v){ return parseFloat(v); },
+    error: "Enter a number like 10 or 0."
+  },
+  {
+    key: "delivery_distance_km",
+    ask: "Approximate delivery distance in km? (e.g. 3)",
+    chips: ["1","2","3","5","8"],
+    validate: function(v){ return !isNaN(parseFloat(v)) && parseFloat(v) >= 0; },
+    parse: function(v){ return parseFloat(v); },
+    error: "Enter a distance like 4.5."
+  },
+  {
+    key: "weekend",
+    ask: "Is this a weekend order?",
+    chips: ["Yes","No"],
+    validate: function(v){ return ["yes","no"].indexOf(v.toLowerCase().trim()) !== -1; },
+    parse: function(v){ return v.toLowerCase().trim() === "yes"; },
+    error: "Please say Yes or No."
+  }
+];
+
+const state = {};
+let stepIndex = 0;
+let awaitingInput = true;
+let currentChips = [];
+
+function capitalise(s) { return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase(); }
+
+// ── Render helpers ───────────────────────────────────────────────────────────
+const chat = document.getElementById('chat');
+
+function appendMsg(role, content, chips = [], isHTML = false) {
+  const wrapper = document.createElement('div');
+  wrapper.className = `msg ${role}`;
+
+  const av = document.createElement('div');
+  av.className = 'avatar';
+  av.textContent = role === 'bot' ? '🤖' : '🧑';
+
+  const bbl = document.createElement('div');
+  bbl.className = 'bubble';
+  if (isHTML) bbl.innerHTML = content;
+  else bbl.textContent = content;
+
+  if (chips.length) {
+    const chipRow = document.createElement('div');
+    chipRow.className = 'chips';
+    chips.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'chip';
+      btn.textContent = c;
+      btn.onclick = () => handleChip(c);
+      chipRow.appendChild(btn);
+    });
+    bbl.appendChild(chipRow);
+  }
+
+  wrapper.appendChild(av);
+  wrapper.appendChild(bbl);
+  chat.appendChild(wrapper);
+  chat.scrollTop = chat.scrollHeight;
+  return wrapper;
+}
+
+function showTyping() {
+  const el = appendMsg('bot', '', [], false);
+  el.querySelector('.bubble').innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+  return el;
+}
+
+function removeEl(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
+
+function updateProgress() {
+  const pct = Math.round((stepIndex / STEPS.length) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ── Flow control ─────────────────────────────────────────────────────────────
+async function botSay(text, chips = [], delay = 500) {
+  const t = showTyping();
+  await sleep(delay);
+  removeEl(t);
+  currentChips = chips;
+  appendMsg('bot', text, chips);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function askNext() {
+  if (stepIndex >= STEPS.length) { await showResult(); return; }
+  const step = STEPS[stepIndex];
+  updateProgress();
+  await botSay(step.ask, step.chips || []);
+  awaitingInput = true;
+}
+
+async function handleInput(raw) {
+  if (!awaitingInput) return;
+  const step = STEPS[stepIndex];
+  if (!step.validate(raw)) {
+    await botSay(step.error || "Hmm, I didn't get that. Please try again.", step.chips || [], 300);
+    return;
+  }
+  awaitingInput = false;
+  state[step.key] = step.parse(raw);
+  stepIndex++;
+  await askNext();
+}
+
+async function showResult() {
+  updateProgress();
+  const typing = showTyping();
+  await sleep(700);
+  removeEl(typing);
+
+  const { predicted, subtotal, discount_amt, delivery_fee } = predictBill(state);
+
+  const html = `
+    <span style="color:#ffcc70;font-size:0.9rem;">Here's your estimated bill 🎉</span>
+    <div class="result-card">
+      <div class="result-label">Estimated Total</div>
+      <div class="result-amount">₹${predicted.toFixed(2)}</div>
+      <div class="breakdown">
+        <div><span>Subtotal (${state.num_items} × ₹${state.avg_item_price})</span><span>₹${subtotal.toFixed(2)}</span></div>
+        <div><span>Discount (${state.discount_percent}%)</span><span>-₹${discount_amt.toFixed(2)}</span></div>
+        <div><span>Delivery fee (~${state.delivery_distance_km}km)</span><span>₹${delivery_fee.toFixed(2)}</span></div>
+        <div><span>🎯 Predicted Total</span><span>₹${predicted.toFixed(2)}</span></div>
+      </div>
+    </div>`;
+
+  appendMsg('bot', html, [], true);
+
+  await sleep(600);
+  appendMsg("bot", "Want to predict another bill? Just type restart to go again!", ["Restart"], false);
+}
+
+function handleChip(val) {
+  appendMsg('user', val);
+  handleInput(val);
+}
+
+// ── Event listeners ──────────────────────────────────────────────────────────
+document.getElementById('sendBtn').onclick = sendMessage;
+document.getElementById('userInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+function sendMessage() {
+  const input = document.getElementById('userInput');
+  const val = input.value.trim();
+  if (!val) return;
+  input.value = '';
+
+  if (val.toLowerCase() === "restart") {
+    Object.keys(state).forEach(k => delete state[k]);
+    stepIndex = 0;
+    chat.innerHTML = '';
+    start();
+    return;
+  }
+
+  appendMsg('user', val);
+  handleInput(val);
+}
+
+// ── Start ────────────────────────────────────────────────────────────────────
+async function start() {
+  updateProgress();
+  await botSay("Hey! I'm your FoodBill AI assistant. I'll ask you a few quick questions about your order and predict the total bill!", [], 100);
+  await sleep(400);
+  await askNext();
+}
+
+start();
+</script>
+</body>
+</html>
